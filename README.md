@@ -9,7 +9,7 @@ outbound traffic and no inbound traffic.
 
 ```hcl
 module "security_list" {
-  source = "github.com/cybercapybara/terraform-oci-security-list"
+  source = "github.com/moveeeax/terraform-oci-security-list"
 
   compartment_id = var.compartment_id
   vcn_id         = var.vcn_id
