@@ -14,7 +14,7 @@ you opt in explicitly.
 
 ```hcl
 module "security_list" {
-  source = "github.com/moveeeax/terraform-oci-security-list"
+  source = "github.com/moveeeax/terraform-oci-security-list?ref=v1.0.0"
 
   compartment_id = var.compartment_id
   vcn_id         = var.vcn_id
