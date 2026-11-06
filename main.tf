@@ -97,6 +97,14 @@ resource "oci_core_security_list" "this" {
           max = ingress_security_rules.value.udp_max
         }
       }
+
+      dynamic "icmp_options" {
+        for_each = ingress_security_rules.value.icmp_type != null ? [1] : []
+        content {
+          type = ingress_security_rules.value.icmp_type
+          code = ingress_security_rules.value.icmp_code
+        }
+      }
     }
   }
 
@@ -122,6 +130,14 @@ resource "oci_core_security_list" "this" {
         content {
           min = egress_security_rules.value.udp_min
           max = egress_security_rules.value.udp_max
+        }
+      }
+
+      dynamic "icmp_options" {
+        for_each = egress_security_rules.value.icmp_type != null ? [1] : []
+        content {
+          type = egress_security_rules.value.icmp_type
+          code = egress_security_rules.value.icmp_code
         }
       }
     }

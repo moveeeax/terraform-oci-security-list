@@ -19,7 +19,8 @@ variable "ingress_rules" {
     number as a string ("1" ICMP, "6" TCP, "17" UDP, "58" ICMPv6) or "all".
     `tcp_min`/`tcp_max` and `udp_min`/`udp_max` describe the destination port
     range and must be set as a pair; omitting them opens every port of that
-    protocol.
+    protocol. `icmp_type` (and optionally `icmp_code`) narrows an ICMP ("1") or
+    ICMPv6 ("58") rule to one message type; omitting it allows every type.
   EOT
   type = list(object({
     protocol    = string
@@ -31,6 +32,8 @@ variable "ingress_rules" {
     tcp_max     = optional(number)
     udp_min     = optional(number)
     udp_max     = optional(number)
+    icmp_type   = optional(number)
+    icmp_code   = optional(number)
   }))
   default = []
 
@@ -85,6 +88,33 @@ variable "ingress_rules" {
     ])
     error_message = "ingress_rules tcp_min/tcp_max require protocol \"6\" (TCP) and udp_min/udp_max require protocol \"17\" (UDP); OCI rejects port options on any other protocol."
   }
+
+  # OCI accepts icmp_options only on ICMP ("1") and ICMPv6 ("58"), requires a
+  # type whenever a code is given, and both are 8-bit fields.
+  validation {
+    condition = alltrue([
+      for rule in var.ingress_rules :
+      (rule.icmp_type == null && rule.icmp_code == null) || contains(["1", "58"], rule.protocol)
+    ])
+    error_message = "ingress_rules icmp_type/icmp_code require protocol \"1\" (ICMP) or \"58\" (ICMPv6); OCI rejects ICMP options on any other protocol."
+  }
+
+  validation {
+    condition = alltrue([
+      for rule in var.ingress_rules :
+      rule.icmp_code == null || rule.icmp_type != null
+    ])
+    error_message = "ingress_rules icmp_code needs icmp_type: OCI matches on a type, and a code alone has no meaning."
+  }
+
+  validation {
+    condition = alltrue([
+      for rule in var.ingress_rules :
+      try(rule.icmp_type == null || (rule.icmp_type >= 0 && rule.icmp_type <= 255 && floor(rule.icmp_type) == rule.icmp_type), false) &&
+      try(rule.icmp_code == null || (rule.icmp_code >= 0 && rule.icmp_code <= 255 && floor(rule.icmp_code) == rule.icmp_code), false)
+    ])
+    error_message = "ingress_rules icmp_type and icmp_code must be whole numbers between 0 and 255."
+  }
 }
 
 variable "egress_rules" {
@@ -92,7 +122,9 @@ variable "egress_rules" {
     List of stateful/stateless egress rules. `protocol` is an IANA protocol
     number as a string ("1" ICMP, "6" TCP, "17" UDP, "58" ICMPv6) or "all".
     `tcp_min`/`tcp_max` and `udp_min`/`udp_max` describe the destination port
-    range and must be set as a pair. Defaults to allowing all outbound traffic.
+    range and must be set as a pair. `icmp_type` (and optionally `icmp_code`)
+    narrows an ICMP ("1") or ICMPv6 ("58") rule to one message type. Defaults to
+    allowing all outbound traffic.
   EOT
   type = list(object({
     protocol         = string
@@ -104,6 +136,8 @@ variable "egress_rules" {
     tcp_max          = optional(number)
     udp_min          = optional(number)
     udp_max          = optional(number)
+    icmp_type        = optional(number)
+    icmp_code        = optional(number)
   }))
   default = [
     {
@@ -161,6 +195,33 @@ variable "egress_rules" {
       ((rule.udp_min == null && rule.udp_max == null) || rule.protocol == "17")
     ])
     error_message = "egress_rules tcp_min/tcp_max require protocol \"6\" (TCP) and udp_min/udp_max require protocol \"17\" (UDP); OCI rejects port options on any other protocol."
+  }
+
+  # OCI accepts icmp_options only on ICMP ("1") and ICMPv6 ("58"), requires a
+  # type whenever a code is given, and both are 8-bit fields.
+  validation {
+    condition = alltrue([
+      for rule in var.egress_rules :
+      (rule.icmp_type == null && rule.icmp_code == null) || contains(["1", "58"], rule.protocol)
+    ])
+    error_message = "egress_rules icmp_type/icmp_code require protocol \"1\" (ICMP) or \"58\" (ICMPv6); OCI rejects ICMP options on any other protocol."
+  }
+
+  validation {
+    condition = alltrue([
+      for rule in var.egress_rules :
+      rule.icmp_code == null || rule.icmp_type != null
+    ])
+    error_message = "egress_rules icmp_code needs icmp_type: OCI matches on a type, and a code alone has no meaning."
+  }
+
+  validation {
+    condition = alltrue([
+      for rule in var.egress_rules :
+      try(rule.icmp_type == null || (rule.icmp_type >= 0 && rule.icmp_type <= 255 && floor(rule.icmp_type) == rule.icmp_type), false) &&
+      try(rule.icmp_code == null || (rule.icmp_code >= 0 && rule.icmp_code <= 255 && floor(rule.icmp_code) == rule.icmp_code), false)
+    ])
+    error_message = "egress_rules icmp_type and icmp_code must be whole numbers between 0 and 255."
   }
 }
 

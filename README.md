@@ -2,13 +2,13 @@
 
 Terraform module that manages an [Oracle Cloud Infrastructure](https://www.oracle.com/cloud/)
 security list within an existing VCN. Ingress and egress rules are supplied as typed
-lists with optional TCP/UDP port ranges and stateless flags. By default it allows all
-outbound traffic and no inbound traffic.
+lists with optional TCP/UDP port ranges, ICMP type/code and stateless flags. By default
+it allows all outbound traffic and no inbound traffic.
 
 Rules are validated at plan time: protocol numbers, source/destination types, CIDR
-syntax and port ranges are all checked, and the module refuses to plan an ingress
-rule that exposes an administrative or database port to the whole internet unless
-you opt in explicitly.
+syntax, port ranges and ICMP type/code are all checked, and the module refuses to plan
+an ingress rule that exposes an administrative or database port to the whole internet
+unless you opt in explicitly.
 
 ## Usage
 
@@ -60,10 +60,41 @@ Both `ingress_rules` and `egress_rules` take a list of objects. Ingress rules us
 | `description`                    | `string` | `null`         | Free text shown in the console                                              |
 | `tcp_min` / `tcp_max`            | `number` | `null`         | Destination port range; requires `protocol = "6"`. Omit both to allow every TCP port |
 | `udp_min` / `udp_max`            | `number` | `null`         | Destination port range; requires `protocol = "17"`. Omit both to allow every UDP port |
+| `icmp_type`                      | `number` | `null`         | ICMP message type, 0-255; requires `protocol = "1"` or `"58"`. Omit to allow every type |
+| `icmp_code`                      | `number` | `null`         | ICMP code, 0-255; requires `icmp_type`. Omit to match every code of that type |
 
 Port ranges must be given as a pair. `tcp_max` without `tcp_min` (or vice versa) is
 rejected rather than silently dropped, because a dropped range would leave the rule
 open on every port of that protocol.
+
+## ICMP type and code
+
+A bare `protocol = "1"` rule admits every ICMP message, echo requests included.
+`icmp_type` and `icmp_code` narrow it to one message type, the same way `tcp_min`/`tcp_max`
+narrow a TCP rule. The rule OCI places in every default security list is ICMP type 3
+code 4 ("fragmentation needed"), which path MTU discovery needs:
+
+```hcl
+locals {
+  icmp_path_mtu_discovery = {
+    protocol    = "1"
+    source      = "0.0.0.0/0"
+    icmp_type   = 3
+    icmp_code   = 4
+    description = "Allow ICMP fragmentation-needed for path MTU discovery"
+  }
+}
+
+module "security_list" {
+  # ...
+  ingress_rules = [local.icmp_path_mtu_discovery]
+}
+```
+
+For IPv6 the equivalent message is ICMPv6 type 2 ("packet too big") with `protocol = "58"`.
+The module rejects `icmp_type`/`icmp_code` on any protocol other than `"1"` and `"58"`, a
+code without a type, and values outside 0-255, all of which OCI would otherwise reject at
+apply time.
 
 ## Public exposure guard
 
@@ -105,8 +136,8 @@ The test suite under `tests/` additionally needs Terraform/OpenTofu >= 1.7 for
 | `compartment_id`             | OCID of the compartment in which to create the security list.     | `string`            | n/a              |   yes    |
 | `vcn_id`                     | OCID of the VCN the security list belongs to.                     | `string`            | n/a              |   yes    |
 | `display_name`               | Human-readable name for the security list.                        | `string`            | n/a              |   yes    |
-| `ingress_rules`              | List of ingress rules with optional TCP/UDP port ranges.          | `list(object(...))` | `[]`             |    no    |
-| `egress_rules`               | List of egress rules with optional TCP/UDP port ranges.           | `list(object(...))` | allow-all egress |    no    |
+| `ingress_rules`              | Ingress rules with optional TCP/UDP ports and ICMP type/code.     | `list(object(...))` | `[]`             |    no    |
+| `egress_rules`               | Egress rules with optional TCP/UDP ports and ICMP type/code.      | `list(object(...))` | allow-all egress |    no    |
 | `allow_public_admin_ingress` | Permit admin/database ports to be reachable from `0.0.0.0/0`.     | `bool`              | `false`          |    no    |
 | `freeform_tags`              | Free-form tags applied to the security list.                      | `map(string)`       | `{}`             |    no    |
 | `defined_tags`               | Defined tags applied to the security list, keyed `namespace.key`. | `map(string)`       | `{}`             |    no    |

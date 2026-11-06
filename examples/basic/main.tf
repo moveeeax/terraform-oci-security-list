@@ -1,5 +1,19 @@
 provider "oci" {}
 
+locals {
+  # The rule OCI puts in every default security list: ICMP type 3 code 4
+  # ("fragmentation needed") from anywhere, which path MTU discovery depends on.
+  # It opens nothing else, unlike a bare protocol "1" rule that admits every
+  # ICMP type including echo requests.
+  icmp_path_mtu_discovery = {
+    protocol    = "1"
+    source      = "0.0.0.0/0"
+    icmp_type   = 3
+    icmp_code   = 4
+    description = "Allow ICMP fragmentation-needed for path MTU discovery"
+  }
+}
+
 module "security_list" {
   source = "../.."
 
@@ -25,10 +39,12 @@ module "security_list" {
       tcp_max     = 22
       description = "Allow SSH from the admin network"
     },
+    local.icmp_path_mtu_discovery,
     {
       protocol    = "1"
-      source      = "0.0.0.0/0"
-      description = "Allow ICMP for path MTU discovery"
+      source      = "10.0.0.0/16"
+      icmp_type   = 8
+      description = "Allow echo requests (ping) from inside the VCN"
     }
   ]
 
