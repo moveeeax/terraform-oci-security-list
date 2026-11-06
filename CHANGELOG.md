@@ -6,6 +6,16 @@ All notable changes to this module are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `icmp_type` and `icmp_code` on `ingress_rules` and `egress_rules`, rendered into
+  `icmp_options`, so an ICMP or ICMPv6 rule can be narrowed to one message type
+  (for example type 3 code 4 for path MTU discovery) instead of admitting every
+  ICMP message. Both are optional; rules without them behave as before. Plan-time
+  validation rejects them on protocols other than `"1"`/`"58"`, a code without a
+  type, and values outside 0-255. The basic example ships a
+  `icmp_path_mtu_discovery` preset.
+
 ### Changed
 
 - CI: bump actions to their current majors, pin tool versions, and restrict the

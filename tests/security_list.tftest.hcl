@@ -400,3 +400,165 @@ run "stateless_rules_in_both_directions_pass_the_check" {
     error_message = "stateless = true must be propagated to the ingress rule."
   }
 }
+
+# --- ICMP type/code ---------------------------------------------------------
+
+run "icmp_type_and_code_are_rendered_into_icmp_options" {
+  variables {
+    ingress_rules = [
+      {
+        protocol  = "1"
+        source    = "0.0.0.0/0"
+        icmp_type = 3
+        icmp_code = 4
+      }
+    ]
+  }
+
+  assert {
+    condition = alltrue([
+      for rule in oci_core_security_list.this.ingress_security_rules :
+      length(rule.icmp_options) == 1 && rule.icmp_options[0].type == 3 && rule.icmp_options[0].code == 4
+    ])
+    error_message = "icmp_type/icmp_code must be rendered into an icmp_options block."
+  }
+}
+
+run "icmp_type_without_code_matches_every_code" {
+  variables {
+    ingress_rules = [
+      {
+        protocol  = "58"
+        source    = "::/0"
+        icmp_type = 2
+      }
+    ]
+  }
+
+  assert {
+    condition = alltrue([
+      for rule in oci_core_security_list.this.ingress_security_rules :
+      length(rule.icmp_options) == 1 && rule.icmp_options[0].type == 2 && rule.icmp_options[0].code == null
+    ])
+    error_message = "An ICMPv6 rule with only icmp_type must render icmp_options with that type and no code."
+  }
+}
+
+run "icmp_without_type_renders_no_icmp_options" {
+  variables {
+    ingress_rules = [
+      {
+        protocol = "1"
+        source   = "10.0.0.0/16"
+      }
+    ]
+  }
+
+  assert {
+    condition = alltrue([
+      for rule in oci_core_security_list.this.ingress_security_rules : length(rule.icmp_options) == 0
+    ])
+    error_message = "Without icmp_type the rule must keep allowing every ICMP type (no icmp_options block)."
+  }
+}
+
+run "egress_icmp_type_is_rendered" {
+  variables {
+    egress_rules = [
+      {
+        protocol    = "1"
+        destination = "0.0.0.0/0"
+        icmp_type   = 8
+      }
+    ]
+  }
+
+  assert {
+    condition = alltrue([
+      for rule in oci_core_security_list.this.egress_security_rules :
+      length(rule.icmp_options) == 1 && rule.icmp_options[0].type == 8
+    ])
+    error_message = "icmp_type must be rendered into egress icmp_options as well."
+  }
+}
+
+run "rejects_icmp_options_on_tcp" {
+  command = plan
+
+  variables {
+    ingress_rules = [
+      {
+        protocol  = "6"
+        source    = "10.0.0.0/16"
+        icmp_type = 3
+      }
+    ]
+  }
+
+  expect_failures = [var.ingress_rules]
+}
+
+run "rejects_icmp_code_without_type" {
+  command = plan
+
+  variables {
+    ingress_rules = [
+      {
+        protocol  = "1"
+        source    = "10.0.0.0/16"
+        icmp_code = 4
+      }
+    ]
+  }
+
+  expect_failures = [var.ingress_rules]
+}
+
+run "rejects_out_of_range_icmp_type" {
+  command = plan
+
+  variables {
+    ingress_rules = [
+      {
+        protocol  = "1"
+        source    = "10.0.0.0/16"
+        icmp_type = 256
+      }
+    ]
+  }
+
+  expect_failures = [var.ingress_rules]
+}
+
+run "rejects_fractional_icmp_code" {
+  command = plan
+
+  variables {
+    egress_rules = [
+      {
+        protocol    = "58"
+        destination = "::/0"
+        icmp_type   = 1
+        icmp_code   = 0.5
+      }
+    ]
+  }
+
+  expect_failures = [var.egress_rules]
+}
+
+run "rejects_icmp_options_on_protocol_all_egress" {
+  command = plan
+
+  variables {
+    egress_rules = [
+      {
+        protocol    = "all"
+        destination = "0.0.0.0/0"
+        icmp_type   = 3
+      }
+    ]
+  }
+
+  expect_failures = [var.egress_rules]
+}
